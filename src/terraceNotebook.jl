@@ -1,16 +1,17 @@
 ### A Pluto.jl notebook ###
-# v0.12.6
+# v0.12.16
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 75f53f00-0ae0-11eb-2523-e988a6f2e181
 begin
-	using BenchmarkTools,LinearAlgebra, Interpolations, DelimitedFiles, Plots, LoopVectorization, NumericalIntegration
+	using BenchmarkTools,LinearAlgebra, Interpolations, DelimitedFiles, Plots, LoopVectorization, NumericalIntegration, StaticArrays
 	include("read_txt_files.jl")
 	include("river_functions.jl")
 	include("solvers.jl")
 	include("others.jl")
+	include("FEM.jl")
 end
 
 # ╔═╡ 8a912dc0-0ae2-11eb-03f9-0f451ad8b10c
@@ -36,18 +37,15 @@ begin # some flags
 end
 
 # ╔═╡ c55008b2-0ae2-11eb-05fe-35f20d380ea4
-begin # INITIAL GEOMETRY ========================================================
-	# profile = "slope";
-	# options:
-    #   "slope"         -> linear profile
-	#   "equilibrium"   -> from excel: exponential decay + sea floor topo
-    dx      =  20.0 # [m] distance between points
-	slope   = -1.0 / 50.0
-    x       = collect(0.0:dx:200e3)
-    dx2     = dx * dx
-	nn      = length(x)
-	sol0    = @. slope * x + 2e3    # 2e3 is the intercept
-	terrace0= copy(sol0)    # 2e3 is the intercept
+begin # INITIAL GEOMETRY ========================================================	
+    Δx      				= 20.0 # [m] distance between points
+	slope                   = -1.0 / 50.0
+    elementype              = "linear"
+    x,z0,dx2,nn,nel,e2n     = mesher(Δx,slope,elementype)
+    elementype == "linear" ? nnodel=2 : nnodel=3
+    z1                      = copy(z0)
+    River                   = Profile{RiverProfile}(x,z0)
+#    Terrace                 = Profile{TerraceProfile}(x,deepcopy(z1))
 end
 
 # ╔═╡ 09195ea4-0ae3-11eb-08e4-c99929247d28
@@ -63,23 +61,30 @@ end
 
 # ╔═╡ 26c54580-0ae3-11eb-3263-f176fad834ee
 begin # PHYSICAL PARAMETERS - stream power law ====================================
-	L = abs(x[1] - x[end])
+	# PHYSICAL PARAMETERS - Subaerial diffusion ===============================    
+    # --- Rivers
     # K = 3.14e-7  # whipple and tucker 1999_ dimensional coeff of erosion
-    K = 5e-6  # whipple and tucker 1999_ dimensional coeff of erosion
-    h = 1.92  # whipple and tucker 1999
-    kappa_a = 4.6071  # whipple and tucker 1999_ area-length coeff
-    m = 0.5
-    n = 1
-    r = @. -K * (kappa_a^m) * (x^(h * m)) / dx 
+    Kr          = 5e-7    # whipple and tucker 1999_ dimensional coeff of erosion
+    h           = 1.92    # whipple and tucker 1999
+    kappa_a     = 4.6071  # whipple and tucker 1999_ area-length coeff
+    m           = 0.5
+    n           = 1.1
+    L           = riverlength(x,z0,nn)
+    r           = @. -Kr * (kappa_a^m) * (L^(h * m)) / Δx # EQUATION    
+    # Buffers
+    rf          = zero(z0)
+    φ           = selectfluxlimiter("vanAlbada")
+    # --- Terrace
+    D           = 4.4e-4 # Fernandes and Dietrich, 1997 (Hillslope evolution...)
+    # =========================================================================
 end
 
 # ╔═╡ 457170e4-0ae3-11eb-149e-6d96ff1ea287
 begin # PHYSICAL PARAMETERS - terrace formation (from Malatesta for wave erosion) =
-	# beta_z  = 2.5e-6 # 1.3e-5 or 7.5e-6
-    beta_z  = 1e-6 # 1.3e-5 or 7.5e-6
-	h_wb    = 100.0
-    P0      = 5e-5 # shallowest
-	P_off   = 5e-2 # offshore
+	βz          = 1e-6 # 1.3e-5 or 7.5e-6
+    h_wb        = 15.0
+    P0          = 5e-5 # shallowest
+    P_off       = 5e-2 # offshore
 end
 
 # ╔═╡ 5740103c-0ae3-11eb-31d5-d795e058982b
@@ -98,6 +103,8 @@ begin # SEA LEVEL ==============================================================
 	sea_age                 = sea_age[id_time]
     sea_age                 = sea_age .- minimum(sea_age)
 	sea_lvl_curve           = sea_lvl_curve[id_time]	
+	fsea                    = interpolate((reverse(sea_age),), sea_lvl_curve, Gridded(Linear()))
+
 end
 
 # ╔═╡ c602f700-0ae3-11eb-3005-9d5af1882906
@@ -121,117 +128,92 @@ end
 # ╔═╡ e865764a-0ae7-11eb-200c-e7fc36fd90d3
 begin
 	# PRE-SOLVER ==================================================================
-	dt          = 1e2 			# time step
+	Δt          = 1e2 			# time step
 	t_plot      = 0.0
-	t           = 0.0    		# initialise time
 	id_shore    = 1	
 end
 
 # ╔═╡ 35efe2a8-0ae4-11eb-393f-3be330f265da
-function mainsolver(sea_age,sea_lvl_curve,t,dt,yr,
-		x,sol,terrace,
-		t_uplift,uplift_background,U0,uplift_type,
-		beta_z,P0,h_wb,imalatesta,
-		n,r,dx)
+function mainsolver(sea_age,sea_lvl_curve,Δt,yr, fsea,
+		Terrace, nn,
+		t_uplift,uplift_background,U0,
+		βz,P0,h_wb,
+		n,r,Δx)
 
-	nn 		 	= length(x)
-	tOut 	 	= Float64[]
-	hseaOut  	= Float64[]
-	# erosionOut	= Float64[]
-	riverOut  	= Array{Float64,1}[]
-	terraceOut 	= Array{Float64,1}[]
-	sol0 		= copy(sol)
+		nit         = Int64(floor(maximum(sea_age .- Δt) / Δt))
+		#erosionOut  = Vector{Float64}(undef,nit)
+		#river_z     = Array{Float64}(undef,nn,nit)
+		terrace_z   = Array{Float64}(undef,nn,nit)
+		buffer1,buffer2 = similar(Terrace.z),similar(Terrace.z)
+		time 		= Vector{Float64}(undef,nit)
+		sea_lvl     = similar(time)
+		t  			= 0.0
 	
-	while t < maximum(sea_age .- dt)
+		for it = 1:nit
 
-        # GET SEA LVL AND UPLIFT RATE =========================================
-        h_sea = interpolate((reverse(sea_age),), sea_lvl_curve, Gridded(Linear()))(t)
+			# GET SEA LVL AND UPLIFT RATE =========================================
+			h_sea = fsea(t)
 
-        # -- find uplift rate at current time
-        if uplift_type == "armel"
-            # -- interpolate
-            U = interpolate((t_uplift,), uplift_background, Gridded(Linear()))(t)
-        elseif uplift_type == "constant"
-            U = U0
-        end
-        # =====================================================================
+			# GET COORDS BELOW SEA LEVEL===========================================
+			id_shore_terrace    = find_shore_id(h_sea, Terrace.z, nn)
+			# =====================================================================
 
-        # GET COORDS BELOW SEA LEVEL===========================================
-        id_shore        = find_shore_id(h_sea, sol, nn)
-        # =====================================================================
+			# TERRACES SOLVER := MALATESTA ========================================
+			terracenewton!( βz,P0,h_wb,Δt *yr,Terrace.z,h_sea,id_shore_terrace+1,nn, buffer1,buffer2)
 
-        # SOLVER BELOW SEA LEVEL = MALATESTA ==================================
-        if imalatesta == 1
-            # -- RIVER PROFILE
-            # terracenewton!(beta_z,P0,h_wb,dt * yr,sol,h_sea,id_shore + 1,nn)
-           
-            # -- TERRACE PROFILE
-            id_shore_terrace  = find_shore_id(h_sea, terrace, nn)
-            terracenewton!(beta_z,P0,h_wb,dt * yr,terrace,h_sea,id_shore_terrace+1,nn)
+			# BACKGROUND UPLIFT ===================================================
+			Terrace.z  .+= U0 * Δt
+			# =====================================================================
+			
+			# FILL OUTPUT PROFILES ================================================
+			@views begin
+		    	#river_z[:,it]      = River.z
+			    terrace_z[:,it]    = Terrace.z
+			end
+			time[it] 	= t
+			sea_lvl[it] = h_sea
+			# =====================================================================
+			
+			t +=  Δt
+
+			#if t > maximum(sea_age.-Δt) #|| t > t_uplift(end)
+			#	break
+			#end
 		end
-        # =====================================================================
-        
-        # SOLVER ABOVE SEA LEVEL ==============================================
-        solve_advection!(sol, n, r, dx, dt, 1, id_shore)        
-        # =====================================================================
-		
-		# # ERODED VOLUME =======================================================
-		# if t > 0.0
-		# 	erosion = erodedvolume(riverOut[end],sol,x,id_shore)
-		# else
-		# 	erosion = erodedvolume(sol0,sol,x,id_shore)
-		# end
-		# # =====================================================================
 
-        # BACKGROUND UPLIFT ===================================================
-        terrace  .+= U * dt
-        sol      .+= U * dt
-        # =====================================================================
-        	 
-		t += dt
-
-		push!(tOut, t)
-		push!(hseaOut, h_sea)
-		# push!(erosionOut, erosion)
-		push!(riverOut, copy(sol))
-		push!(terraceOut, copy(terrace))
-
-        # if t > 1e3 #|| t > t_uplift(end)
-        #     break
-		# end
-		
-	end
-
-	return riverOut, terraceOut, tOut, hseaOut
+		return terrace_z,time,sea_lvl
 end
 
 # ╔═╡ 68d55cd8-0af4-11eb-0dc7-bbd95dd10d45
 timefinder(time::Vector{Float64},t::Number) = argmin(abs.(time.-float(t)))
 
 # ╔═╡ 23b62cde-0ae5-11eb-05b1-e10c2d478e23
-river_z,terrace_z, time, h_sea = mainsolver(sea_age,sea_lvl_curve,t,dt,yr,
-		x,sol0,terrace0,
-		t_uplift,uplift_background,U0,uplift_type,
-		beta_z,P0,h_wb,imalatesta,
-		n,r,dx)
+begin
+	    Terrace     = Profile{TerraceProfile}(x,deepcopy(z1))
+terrace_z, t, h_sea = mainsolver(sea_age,sea_lvl_curve,Δt,yr, fsea,
+		Terrace,nn,
+		t_uplift,uplift_background,U0,
+		βz,P0,h_wb,
+		n,r,Δx)
+end
 
 # ╔═╡ 16d9a0de-0ae9-11eb-1d1f-07ed9a98cc31
 begin	
-	t1 = time[end]/1e3
+	t1 = t[end]/1e3
 	
 	hline([h_sea[end]],
 		color=:blue)
 	
-	plot!(x/1e3, river_z[end],
-		color=:red,
-		label="river")
+	#plot!(Terrace.x/1e3, Terrace.z[end],
+	#	color=:red,
+	#	label="river")
 	
-	plot!(x/1e3, terrace_z[end],
+	plot!(x/1e3, terrace_z[:,end],
 		color=:green,
 		label="terrace")
 
-	xlims!(75,150)
-	ylims!(-200,400)
+	xlims!(90,130)
+	ylims!(-100,600)
 	title!("time $t1 kyrs")
 end
 
@@ -268,10 +250,10 @@ end
 
 # ╔═╡ 396c043c-0be5-11eb-0b49-2be9189080da
 begin
-	dz=firstderivative(x,river_z[end])
-	dz_terrace=firstderivative(x,terrace_z[end])
-	dzz=secondderivative(x,river_z[end])
-	dzz_terrace=secondderivative(x,terrace_z[end])
+	#dz=firstderivative(x,river_z[end])
+	dz_terrace=firstderivative(x,terrace_z[:,end])
+	#dzz=secondderivative(x,river_z[end])
+	dzz_terrace=secondderivative(x,terrace_z[:,end])
 end
 
 # ╔═╡ 85730772-0be5-11eb-2861-8bb8e90bc525
@@ -280,11 +262,11 @@ begin
 		color=:blue,
 		label="terrace")
 
-	plot!(x/1e3, dz,
-		color=:red,
-		label="river")
+	#plot!(x/1e3, dz,
+	#	color=:red,
+	#	label="river")
 
-	xlims!(75,150)
+	xlims!(90,200)
 	ylims!(-0.1,0)
 	title!("time $t1 kyrs")
 end
@@ -295,9 +277,9 @@ begin
 		color=:blue,
 		label="terrace")
 
-	plot!(x/1e3, dzz./maximum(dzz),
-		color=:red,
-		label="river")
+	#plot!(x/1e3, dzz./maximum(dzz),
+	#	color=:red,
+	#	label="river")
 
 	xlims!(90,130)
 	ylims!(-1,1)
@@ -306,22 +288,22 @@ end
 
 # ╔═╡ a5b0d85a-0af7-11eb-0d86-d372e97c147e
 begin
-	it = timefinder(time, 100e3)
-	t2 = time[it]/1e3
+	it = timefinder(t, 100e3)
+	t2 = t[it]/1e3
 	
 	hline([h_sea[it]],
 		color=:blue)
 	
-	plot!(x/1e3, river_z[it],
-		color=:red,
-		label="river")
+	#plot!(x/1e3, river_z[:,it],
+	#	color=:red,
+	#	label="river")
 	
-	plot!(x/1e3, terrace_z[it],
+	plot!(x/1e3, terrace_z[:,it],
 		color=:green,
 		label="terrace")
 
-	xlims!(75,175)
-	ylims!(-200,1e3)
+	xlims!(90,130)
+	ylims!(-100,600)
 	title!("time $t2 kyrs")
 end
 
@@ -349,23 +331,23 @@ end
 
 # ╔═╡ d6e99588-0afc-11eb-141c-cbd637033019
 # make animation (it's quite slow, consider comenting it down)
-anim = @animate for it ∈ 1:5:length(time)
-	t2 = time[it]/1e3
+anim = @animate for it ∈ 1:5:length(t)
+	t2 = t[it]/1e3
 	
 	hline([h_sea[it]],
 		color=:blue,
 		label="sea_level")
 	
-	plot!(x/1e3, river_z[it],
-		color=:red,
-		label="river")
+	#plot!(x/1e3, river_z[it],
+	#	color=:red,
+	#	label="river")
 	
-	plot!(x/1e3, terrace_z[it],
+	plot!(x/1e3, terrace_z[:,it],
 		color=:green,
 		label="terrace")
 
-	xlims!(75,175)
-	ylims!(-200,1e3)
+	xlims!(90,130)
+	ylims!(-100,600)
 	title!("time $t2 kyrs")
 end 
 
@@ -373,26 +355,26 @@ end
 gif(anim, "anim_fps15.gif", fps = 1000)
 
 # ╔═╡ Cell order:
-# ╠═75f53f00-0ae0-11eb-2523-e988a6f2e181
-# ╠═8a912dc0-0ae2-11eb-03f9-0f451ad8b10c
+# ╟─75f53f00-0ae0-11eb-2523-e988a6f2e181
+# ╟─8a912dc0-0ae2-11eb-03f9-0f451ad8b10c
 # ╠═c55008b2-0ae2-11eb-05fe-35f20d380ea4
 # ╟─09195ea4-0ae3-11eb-08e4-c99929247d28
-# ╠═26c54580-0ae3-11eb-3263-f176fad834ee
+# ╟─26c54580-0ae3-11eb-3263-f176fad834ee
 # ╠═457170e4-0ae3-11eb-149e-6d96ff1ea287
 # ╟─5740103c-0ae3-11eb-31d5-d795e058982b
-# ╟─97929f92-0ae3-11eb-119b-71390eb9e1d3
-# ╟─c602f700-0ae3-11eb-3005-9d5af1882906
-# ╟─e865764a-0ae7-11eb-200c-e7fc36fd90d3
-# ╟─35efe2a8-0ae4-11eb-393f-3be330f265da
-# ╟─68d55cd8-0af4-11eb-0dc7-bbd95dd10d45
-# ╟─23b62cde-0ae5-11eb-05b1-e10c2d478e23
-# ╟─16d9a0de-0ae9-11eb-1d1f-07ed9a98cc31
+# ╠═97929f92-0ae3-11eb-119b-71390eb9e1d3
+# ╠═c602f700-0ae3-11eb-3005-9d5af1882906
+# ╠═e865764a-0ae7-11eb-200c-e7fc36fd90d3
+# ╠═35efe2a8-0ae4-11eb-393f-3be330f265da
+# ╠═68d55cd8-0af4-11eb-0dc7-bbd95dd10d45
+# ╠═23b62cde-0ae5-11eb-05b1-e10c2d478e23
+# ╠═16d9a0de-0ae9-11eb-1d1f-07ed9a98cc31
 # ╟─7aa3489e-0be4-11eb-1860-ab0c09bee274
-# ╟─396c043c-0be5-11eb-0b49-2be9189080da
-# ╟─85730772-0be5-11eb-2861-8bb8e90bc525
-# ╟─de4afc50-0be6-11eb-0f3d-c343541ee0f7
+# ╠═396c043c-0be5-11eb-0b49-2be9189080da
+# ╠═85730772-0be5-11eb-2861-8bb8e90bc525
+# ╠═de4afc50-0be6-11eb-0f3d-c343541ee0f7
 # ╠═a5b0d85a-0af7-11eb-0d86-d372e97c147e
 # ╟─5407d816-0b4f-11eb-0199-d5d5a2cd192a
 # ╟─666ec31c-0b4e-11eb-11dc-4518cca1359c
 # ╠═d6e99588-0afc-11eb-141c-cbd637033019
-# ╠═dfc32998-0afd-11eb-0d19-4d8729c6870f
+# ╟─dfc32998-0afd-11eb-0d19-4d8729c6870f

@@ -12,10 +12,10 @@ mutable struct Profile{T}
     z::Vector{Float64}
 end
 
-mutable struct CuProfile{T}
-    x::CuArray{Float32,1}
-    z::CuArray{Float32,1}
-end
+# mutable struct CuProfile{T}
+#     x::CuArray{Float32,1}
+#     z::CuArray{Float32,1}
+# end
 
 function femsolver(Δt,Δx,e2n,nel,nnod, River::Profile{RiverProfile},hsea,
     K,M,iMC,jMC,
