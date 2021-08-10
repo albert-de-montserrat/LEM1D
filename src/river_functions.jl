@@ -1,6 +1,56 @@
-###############################################################
-#  FUNCTION -> find_shore_id                                    #
-###############################################################
+±(a::Number, b::Number) = (a-b, a+b)
+
+function find_shore_id(h_sea, River::Profile, Terrace::Profile, id::NamedTuple)
+    # unpack 
+    zr, zt, n = River.z, Terrace.z, Terrace.nnod
+    # indices
+    ir, it = 0, 0
+    midpoint = n÷2 
+    mr, mt = id
+    # We start searching from the center of the profile and start moving with ±1 steps to both sides
+    for j = 1:midpoint
+
+        idx = ifelse(
+            j == 1,
+            mr ± 0, # ± 0 to make it type stable
+            mr ± j
+        )
+
+        if ir == 0
+            for i in idx
+                # check river
+                ir = ifelse(
+                    zr[i] <= h_sea,
+                    i,
+                    0
+                )
+            end
+        end
+       
+        idx = ifelse(
+            j == 1,
+            mt ± 0, # ± 0 to make it type stable
+            mt ± j
+        )
+
+        if it == 0
+            for i in idx
+                # check terrace
+                it = ifelse(
+                    zt[i] <= h_sea,
+                    i,
+                    0
+                )
+            end
+        end
+
+        if (ir>0) && (it>0)
+            return (terrace = it, river = ir)
+        end
+
+    end
+end
+
 function find_shore_id(h_sea::Float64,sol::Array{Float64},n::Int64)
     for ii = 1:n-1
          # @inbounds if sol[ii] > h_sea && sol[ii+1] <= h_sea
@@ -9,34 +59,21 @@ function find_shore_id(h_sea::Float64,sol::Array{Float64},n::Int64)
             break
         end
     end
-end ## END find_shore_id FUNCTION ##############################
+end
 
-###############################################################
-#  FUNCTION -> find_shore_id                                  #
-###############################################################
-# function find_shore_id(h_sea::Float64,sol::CuArray{Float32},n::Int64)
-#     numblocks = ceil(Int, n/256)
-#     CUDA.@sync begin
-#         @cuda threads=256 blocks=numblocks idx=CUfind_shore_id(h_sea,sol,n)
-#     end
-#     return idx 
-# end
-
-function CUfind_shore_id(h_sea,sol,n)
-    index = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    stride = blockDim().x * gridDim().x
-    for ii = index:stride:n
-        # @inbounds if sol[ii] > h_sea && sol[ii+1] <= h_sea
+function find_shore_id_terrace(h_sea::Float64,sol::Array{Float64},n::Int64)
+    i1=1
+    for ii = 1:n-1
+         # @inbounds if sol[ii] > h_sea && sol[ii+1] <= h_sea
         @inbounds if sol[ii] <= h_sea
-            return ii
-            break
+            i1 =  ii
+        end
+        @inbounds if h_sea-sol[ii] > 500
+            return i1, ii
         end
     end
-end ## END find_shore_id FUNCTION ##############################
+end 
 
-###############################################################
-#  FUNCTION -> localmaxmin                                    #
-###############################################################
 function localmaxmin(y::Array{Float64,1},nn::Int64)
     dummy_min = Array{Int32}(undef,nn,1)
     dummy_max = Array{Int32}(undef,nn,1)
@@ -103,11 +140,8 @@ function localmaxmin(y::Array{Float64,1},nn::Int64)
     end
 
     return idx_min,idx_max,idx_ids
-end ## END localmaxmin FUNCTION ##############################
+end
 
-###############################################################
-#  FUNCTION -> segdist                                        #
-###############################################################
 function segdist(idx_ids::Array{Int32,2},x::Vector{Float64},z::Vector{Float64})
     nx        = length(x)
     nsegments = length(idx_ids) - 1

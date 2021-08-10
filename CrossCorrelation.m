@@ -4,7 +4,7 @@
 zref            = zref(isort);
 
 % -- Load Julia CSV model
-model = loadmodel('Spratt800_Δx5.0_βx0_U0.0_b-z5.7e-6h_wb63slope-0.0791.csv');
+model = loadmodel('potato.h5');
 hsea  = 101.33;
 
 % -- Resample reference model

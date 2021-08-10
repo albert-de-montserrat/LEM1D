@@ -1,6 +1,3 @@
-###############################################################
-#  FUNCTION -> localmaxmin                                    #
-###############################################################
 function localmaxmin(y::Array{Float64,1},nn::Int64)
     dummy_min = Array{Int32}(undef,nn,1)
     dummy_max = Array{Int32}(undef,nn,1)
@@ -25,7 +22,6 @@ function localmaxmin(y::Array{Float64,1},nn::Int64)
 
     # ---- Check 2:end-1 node
     @inbounds @simd for ii = 2:nn-2
-        # global cmax,cmin,cids
         if y[ii+1] > y[ii] && y[ii-1] > y[ii] # local minima
             dummy_min[cmin] = ii
             cmin    += 1
@@ -67,11 +63,8 @@ function localmaxmin(y::Array{Float64,1},nn::Int64)
     end
 
     return idx_min,idx_max,idx_ids
-end ## END localmaxmin FUNCTION
+end 
 
-###############################################################
-#  FUNCTION -> segdist                                        #
-###############################################################
 function segdist(idx_ids::Array{Int32,2},x::Vector{Float64},z::Vector{Float64})
     nx        = length(x)
     nsegments = length(idx_ids) - 1
@@ -132,35 +125,20 @@ function erodedvolume(z0,z,x)
     return integrate(x,δz,TrapezoidalEvenFast())
 end
 
-function riverlength(x,z,nnod)        
+function riverlength(x, z, nnod)    
     L = fill(0.0,nnod)        
-    @inbounds @fastmath for i ∈ 2:nnod
+    @tturbo for i ∈ 2:nnod
         L[i] = L[i-1] + sqrt( (x[i]-x[i-1])^2  + (z[i]-z[i-1])^2) 
     end
     return L
 end
 
-# @inline function riverlength!(L,x,z,nnod)                   
-#     @inbounds @fastmath for i ∈ 2:nnod
-#         L[i] = L[i-1] + sqrt( (x[i]-x[i-1])^2  + (z[i]-z[i-1])^2) 
-#     end
-# end
+@inline pow32(a::T, b::Real) where T = 
+    convert(T, convert(Float32,a)^convert(Float32,b))
 
-# @inline function updater!(r, Kr, kappa_a, L, h, m, dx, x,z , nn)
-#     riverlength!(L,x,z,nn)
-#     r .= @. -Kr * (kappa_a^m) * (L^(h * m)) / dx 
-# end
-
-@inline function updater!(r, Kr, kappa_a, L, h, m, dx, x,z , nn)
-    Threads.@threads for i ∈ 2:nn
-        L[i] = L[i-1] + sqrt( dx  + (z[i]-z[i-1])*(z[i]-z[i-1])) 
-        # r[i] = -Kr * (kappa_a^m) * (L[i]^(h * m)) / dx 
-        r[i] = -Kr * pow32(kappa_a,m) * pow32(L[i],h * m) / dx 
-
+function uplift!(z1, z2, h)
+    @tturbo for i in eachindex(z1)
+        z1[i] += h
+        z2[i] += h
     end
-end
-
-@inline function pow32(a::Float64,b::Number)
-    a = convert(Float32,a)^convert(Float32,b)
-    return convert(Float64,a)
 end
