@@ -9,6 +9,7 @@ mutable struct Profile{T}
     Δx::Float64
 end
 
+<<<<<<< HEAD
 struct ScratchFEM{F,I}
     K::SparseMatrixCSC{F, I}
     M::SparseMatrixCSC{F, I}
@@ -31,6 +32,12 @@ struct ScratchTerraceFEM{F,I}
     end
 
 end
+=======
+# mutable struct CuProfile{T}
+#     x::CuArray{Float32,1}
+#     z::CuArray{Float32,1}
+# end
+>>>>>>> 1a08b648b484c24b7bb8751b7b6220f259ac72c1
 
 function femsolver(Δt,Δx,nnod, River::Profile{RiverProfile},hsea,
     Scratch_FEM::ScratchFEM,
