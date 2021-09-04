@@ -7,31 +7,49 @@ fluxlimiter(::Type{FluxLimiter{ospre}}, rf)       = 1.5(rf^2+rf)/(rf^2+rf+1)
 fluxlimiter(::Type{FluxLimiter{hquick}}, rf)      = 2.0(rf+abs(rf))/(rf+2)
 fluxlimiter(::Type{FluxLimiter{koren}}, rf)       = max(0,min(2rf,min((1+2rf)/3,2)))
 
-@inline function rfactor!(rf, sol, ilast)
-    """
-    This is Wikipedias definition, paper has a slightly different one
-    """
-    @inbounds Threads.@threads for i in 1:ilast
-       s1 =  sol[i+1] - sol[i]
-       rf[i] = s1 == 0.0 ? 1.0 : (sol[i+2] - sol[i+1]) * (1/s1)
-	end
-    @inbounds rf[ilast] = 1.0
-    @inbounds rf[ilast-1] = 1.0
-end
 
 @inline function updater!(RiverPhysics, RiverArrays, River)
     # unpack
     Kr, kappa_a, h, m = RiverPhysics.Kr, RiverPhysics.kappa_a,  RiverPhysics.h, RiverPhysics.m
     L, r = RiverArrays.L, RiverArrays.r
-    dx, z, nn = River.Δx^2, River.z, River.nn
+    dx, z, x = River.Δx^2, River.z, River.x
+
     # constant values
     cte1 = -Kr*(kappa_a^m)/dx
     cte2 = h*m
-    # tight loop
-    Threads.@threads for i in 2:nn
-        @inbounds L[i] = L[i-1] + pow32(dx  + (z[i]-z[i-1])^2, 0.5) 
-        @inbounds r[i] = cte1 * pow32(L[i], cte2)
+    # update river length
+    river_length!(L, River)
+    @tturbo for i ∈ 2:length(x)
+        r[i] = cte1 * L[i]^(cte2) 
     end
+end
+
+function river_length!(L, River)
+    x, z, dx = River.x, River.z, River.Δx^2
+    @tturbo for i in 2:length(x)
+        L[i] = √(dx  + (z[i]-z[i-1])^2) 
+    end
+    @inbounds @fastmath for i in 2:length(x)
+        L[i] += L[i-1]
+    end
+end
+
+@inline function rfactor!(rf, sol, ilast)
+    """
+    Wikipedia definition, paper has a slightly different one
+    """
+    @inbounds for i in 1:ilast
+        s1 =  sol[i+1] - sol[i]
+        if s1 == 0.0
+            rf[i] = 1.0
+        elseif s1 <= 0.0
+            rf[i] = 0.0
+        else
+            rf[i] = (sol[i+2] - sol[i+1]) / s1
+        end
+	end
+    @inbounds rf[ilast] = 1.0
+    @inbounds rf[ilast-1] = 1.0
 end
 
 function TVD!(River, sol0, RiverPhysics::KnickPointsParameters, RiverArrays::KnickPointsArrays, dt, ilast)
@@ -48,7 +66,7 @@ function TVD!(River, sol0, RiverPhysics::KnickPointsParameters, RiverArrays::Kni
     invdxdt = dt*invdx
     half_dt = dt*0.5
 
-    for i in 2:ilast
+    @fastmath for i in 2:ilast
         # cache
         @inbounds soli, solplus, solminus = sol0[i], sol0[i+1], sol0[i-1]
         @inbounds ri = r[i]
@@ -63,8 +81,9 @@ function TVD!(River, sol0, RiverPhysics::KnickPointsParameters, RiverArrays::Kni
         @inbounds Fᵣ = Frlo+fluxlimiter(φ, rf[i]) * (Frhi - Frlo )
         @inbounds Fₗ = Fllo+fluxlimiter(φ, rf[i-1]) * (Flhi - Fllo )
         # non linear term
-        @inbounds multiplier  = pow32((sol0[i] - sol0[i+1])*invdx, n-1) # |-> pow32 speeds up the whole solver by 60%
+        @inbounds multiplier  = ((sol0[i] - sol0[i+1])*invdx)^(n-1) # |-> pow32 speeds up the whole solver by 60%
         # update solution
-        @inbounds sol[i] -= invdxdt*(Fᵣ-Fₗ) * multiplier
+        @inbounds sol[i] = max(sol[i] - invdxdt*(Fᵣ-Fₗ) * multiplier, sol[i+1])
+        # @inbounds sol[i] -= invdxdt*(Fᵣ-Fₗ) * multiplier
     end
 end

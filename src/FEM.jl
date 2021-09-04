@@ -42,7 +42,6 @@ function femsolver(Δt,Δx,nnod, River::Profile{RiverProfile},hsea,
     K_s, λ = SubmarinePhysics.K_s, SubmarinePhysics.λ
     K, M, iMC, jMC = Scratch_FEM.K, Scratch_FEM.M, Scratch_FEM.iMC, Scratch_FEM.jMC 
 
-
     x = River.x
     z = River.z
     e2n = River.e2n
@@ -523,11 +522,19 @@ end
 
 @inline function norm2(A::Vector{T}, B::Vector{T}) where T
     norm = zero(T)
-    @turbo for i in eachindex(A)
+    @tturbo for i in eachindex(A)
          norm += (A[i] - B[i])^2
     end
-     √(norm)
+    √(norm)
+end 
 
+@inline function norm2(A::Vector{T}, B::Vector{T}, indices::NamedTuple) where T
+    norm = zero(T)
+    i1, i2 = indices.i1, indices.i2
+    @tturbo for i in i1:i2
+         norm += (A[i] - B[i])^2
+    end
+    √(norm)
 end 
 
 function mesher(Δx, slope, type::String)
@@ -542,8 +549,8 @@ end
 
 function linearmesh(Δx,slope)
     # -- Mesh
-    x       = collect(0:Δx:400e3)
-    z       = @. slope * x + 4e3    # 2e3 is the intercept
+    x       = collect(0:Δx:200e3)
+    z       = @. slope * x + 2e3    # 2e3 is the intercept
     dx2     = Δx * Δx
     nn      = length(x)
 

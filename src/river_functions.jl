@@ -1,12 +1,12 @@
 ±(a::Number, b::Number) = (a-b, a+b)
 
-function find_shore_id(h_sea, River::Profile, Terrace::Profile, id::NamedTuple)
+function find_shore_id(h_sea, River::Profile, Terrace::Profile, TerracePhysics, id::NamedTuple)
     # unpack 
     zr, zt, n = River.z, Terrace.z, Terrace.nnod
     # indices
     ir, it = 0, 0
     midpoint = n÷2 
-    mr, mt = id
+    mr, mt = id.terrace.i1, id.river.i1
     # We start searching from the center of the profile and start moving with ±1 steps to both sides
     for j = 1:midpoint
 
@@ -19,7 +19,7 @@ function find_shore_id(h_sea, River::Profile, Terrace::Profile, id::NamedTuple)
         if ir == 0
             for i in idx
                 # check river
-                ir = ifelse(
+                @inbounds ir = ifelse(
                     zr[i] <= h_sea,
                     i,
                     0
@@ -36,7 +36,7 @@ function find_shore_id(h_sea, River::Profile, Terrace::Profile, id::NamedTuple)
         if it == 0
             for i in idx
                 # check terrace
-                it = ifelse(
+                @inbounds it = ifelse(
                     zt[i] <= h_sea,
                     i,
                     0
@@ -45,10 +45,37 @@ function find_shore_id(h_sea, River::Profile, Terrace::Profile, id::NamedTuple)
         end
 
         if (ir>0) && (it>0)
-            return (terrace = it, river = ir)
+            infected_nodes_terrace = infected_indices(
+                Terrace, TerracePhysics, it
+            )
+            infected_nodes_river = infected_indices(
+                River, TerracePhysics, it
+            )
+            return (terrace = infected_nodes_terrace, river = infected_nodes_river)
         end
 
     end
+
+
+end
+
+function infected_indices(
+    profile::Profile, TerracePhysics::TerraceParameters, id_shore::Int64
+    )
+    
+    idx, i1 = id_shore, id_shore
+    z = profile.z
+    h_wb = 3/2*TerracePhysics.h_wb # influence of sea bed erosion (x1.5 as a safety buffer zone)
+    zshore = z[idx] # height of sea level
+    zᵢ = z[idx+1]
+
+    while (zshore - zᵢ) < h_wb
+        idx += 1
+        @inbounds zᵢ = z[idx]
+    end
+
+    (i1 = i1, i2 = idx)
+    
 end
 
 function find_shore_id(h_sea::Float64,sol::Array{Float64},n::Int64)
@@ -72,99 +99,4 @@ function find_shore_id_terrace(h_sea::Float64,sol::Array{Float64},n::Int64)
             return i1, ii
         end
     end
-end 
-
-function localmaxmin(y::Array{Float64,1},nn::Int64)
-    dummy_min = Array{Int32}(undef,nn,1)
-    dummy_max = Array{Int32}(undef,nn,1)
-    dummy_ids = Array{Int32}(undef,nn,1)
-    fill!(dummy_min,0)
-    fill!(dummy_max,0)
-    fill!(dummy_ids,0)
-
-    # ---- Check 1st node
-    cmin,cmax,cids = 1,1,1
-    if y[2] > y[1] # local minima
-        dummy_min[1] = 1
-        cmin        += 1
-        dummy_ids[1] = 1
-        cids        += 1
-    else # local maxima
-        dummy_max[1] = 1
-        cmax        += 1
-        dummy_ids[1] = 1
-        cids        += 1
-    end
-
-    # ---- Check 2:end-1 node
-    @inbounds @simd for ii = 2:nn-2
-        # global cmax,cmin,cids
-        if y[ii+1] > y[ii] && y[ii-1] > y[ii] # local minima
-            dummy_min[cmin] = ii
-            cmin    += 1
-            dummy_ids[cids] = ii
-            cids    += 1
-        elseif y[ii+1] < y[ii] && y[ii-1] < y[ii] # local maxima
-            dummy_max[cmax] = ii
-            cmax    += 1
-            dummy_ids[cids] = ii
-            cids    += 1
-        end
-    end
-
-    # ---- Check last node
-    if y[nn] < y[nn-1] # local minima
-        dummy_min[cmin] = nn
-        cmin        += 1
-        dummy_ids[cids] = nn
-        cids        += 1
-    else # local maxima
-        dummy_max[cmax] = nn
-        cmax        += 1
-        dummy_ids[cids] = nn
-        cids        += 1
-    end
-
-    # ---- Remove zeros
-    idx_min = Array{Int32}(undef, cmin-1,1)
-    idx_max = Array{Int32}(undef, cmax-1,1)
-    idx_ids = Array{Int32}(undef, cids-1,1)
-    @inbounds for ii = 1:cmin-1
-        idx_min[ii] = dummy_min[ii]
-    end
-    @inbounds for ii = 1:cmax-1
-        idx_max[ii] = dummy_max[ii]
-    end
-    @inbounds for ii = 1:cids-1
-        idx_ids[ii] = dummy_ids[ii]
-    end
-
-    return idx_min,idx_max,idx_ids
 end
-
-function segdist(idx_ids::Array{Int32,2},x::Vector{Float64},z::Vector{Float64})
-    nx        = length(x)
-    nsegments = length(idx_ids) - 1
-    Lsegments = Array{Float64}(undef,nsegments,1)
-    dist2high = Array{Float64}(undef,nx,1)
-
-    @inbounds for ii = 1:nsegments
-        id1 = idx_ids[ii];
-        id2 = idx_ids[ii+1];
-
-        for jj = id1:id2
-
-            if  z[id2] > z[id1]
-                xhigh = x[id2]
-            else
-                xhigh = x[id1]
-            end
-
-            dist2high[jj] = abs(x[jj] - xhigh)
-
-        end
-    end
-
-    return dist2high
-
-end ## END segdist FUNCTION ##################################

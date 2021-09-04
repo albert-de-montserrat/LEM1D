@@ -11,15 +11,23 @@ function solve(solver::Type{ModelOpts{TerraceOnly}},
     Δt, River, Terrace, h_sea, id_shore, buffer1, buffer2,
     ScratchTerrace_FEM, Scratch_FEM, to)
 
-    # -- TERRACE PROFILE            
-    @timeit to "newton terrace" terracenewton!(
+    # -- TERRACE PROFILE
+    zt = Terrace.z
+    # @timeit to "newton terrace" terracenewton!(
+    #     TerracePhysics,
+    #     (Δt * yr),
+    #     zt,
+    #     h_sea,
+    #     id_shore.terrace, 
+    #     buffer1,
+    #     buffer2)
+
+    @timeit to "newton terrace" terracenewton2!(
         TerracePhysics,
-        Δt * yr,
-        Terrace.z,
+        (Δt * yr),
+        zt,
         h_sea,
-        id_shore.terrace+1, 
-        buffer1,
-        buffer2)
+        id_shore.terrace)
 
     return Terrace, River,to
 end
@@ -45,11 +53,11 @@ function solve(solver::Type{ModelOpts{TerraceKnickpoint}},
         Δt * yr,
         Terrace.z,
         h_sea,
-        id_shore.terrace+1, 
+        id_shore.terrace, 
         buffer1,
         buffer2)            
 
-    # KNICKPOINT MIGRATION ADVECTION -> FLUX LIMITER TVD =============================
+    # KNICKPOINT MIGRATION ADVECTION -> FLUX LIMITER TVD 
     @timeit to "update r" updater!(RiverPhysics, RiverArrays, River)
     @timeit to "TVD" TVD!(River, buffer1, RiverPhysics, RiverArrays, Δt, id_shore.river)
 
@@ -77,11 +85,11 @@ function solve(solver::Type{ModelOpts{TerraceKnickpointDiffusion}},
         Δt * yr,
         Terrace.z,
         h_sea,
-        id_shore.terrace+1, 
+        id_shore.terrace, 
         buffer1,
         buffer2)
                                                
-    # KNICKPOINT MIGRATION ADVECTION -> FLUX LIMITER TVD =============================
+    # KNICKPOINT MIGRATION ADVECTION -> FLUX LIMITER TVD
     @timeit to "update r" updater!(RiverPhysics, RiverArrays, River)
     @timeit to "TVD" TVD!(River, buffer1, RiverPhysics, RiverArrays, Δt, id_shore.river)
 
@@ -91,7 +99,7 @@ function solve(solver::Type{ModelOpts{TerraceKnickpointDiffusion}},
                                                HillSlopePhysics,
                                                SubmarinePhysics)
 
-    # TERRACE ==========================================================
+    # TERRACE 
     # Diffusion over Δt
     @timeit to "FEM Terrace" Terrace.z = femsolver(
             Δt, 
@@ -113,14 +121,14 @@ function solve(solver::Type{ModelOpts{TerraceDiffusion}},
     # -- TERRACE PROFILE            
     @timeit to "newton terrace" terracenewton!(
         TerracePhysics,
-        Δt * yr,
+        (Δt * yr),
         Terrace.z,
         h_sea,
-        id_shore.terrace+1, 
+        (id_shore.terrace), 
         buffer1,
         buffer2)
     
-    # TERRACE ==========================================================
+    # TERRACE
     @timeit to "FEM Terrace" Terrace.z = femsolver(
             Δt, 
             Terrace, 
@@ -133,4 +141,9 @@ function solve(solver::Type{ModelOpts{TerraceDiffusion}},
     return Terrace, River,to                                               
 end
 
-
+function old_solver!(Terrace, TerracePhysics, h_sea, id_shore, dt)
+    P, h_wb, βz = TerracePhysics.P0, TerracePhysics.h_wb, TerracePhysics.βz
+    for i in id_shore.terrace.i1: id_shore.terrace.i2
+        @inbounds Terrace.z[i] += - βz .* P .* exp(-4*(h_sea-Terrace.z[i])/h_wb) * dt
+    end
+end

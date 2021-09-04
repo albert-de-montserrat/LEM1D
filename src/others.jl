@@ -125,10 +125,12 @@ function erodedvolume(z0,z,x)
     return integrate(x,δz,TrapezoidalEvenFast())
 end
 
-function riverlength(x, z, nnod)    
-    L = fill(0.0,nnod)        
+# NOTE: thigs should be in-place
+function riverlength(x, z, nnod) 
+    L = fill(0.0,nnod)    
+    # cummulative length    
     @tturbo for i ∈ 2:nnod
-        L[i] = L[i-1] + sqrt( (x[i]-x[i-1])^2  + (z[i]-z[i-1])^2) 
+        L[i] = L[i-1] + sqrt((x[i]-x[i-1])^2  + (z[i]-z[i-1])^2) 
     end
     return L
 end

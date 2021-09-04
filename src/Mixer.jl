@@ -1,4 +1,4 @@
-using BenchmarkTools
+
 using LinearAlgebra
 using SparseArrays
 using Interpolations
@@ -8,13 +8,14 @@ using LoopVectorization
 using StaticArrays
 using TimerOutputs
 using HDF5
-using GLMakie
+using Polyester
+
 # using CSV,DataFrames
 include("src/ProcessParameters.jl")
 include("src/read_txt_files.jl")
 include("src/solvers.jl")
 include("src/Knickpoints.jl")
-include("solver_dispatch.jl")
+include("src/solver_dispatch.jl")
 include("src/others.jl")
 include("src/FEM.jl")
 include("src/river_functions.jl")
