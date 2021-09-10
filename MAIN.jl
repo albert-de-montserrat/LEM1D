@@ -1,14 +1,5 @@
-import Pkg; Pkg.activate(".")
 using LEM1D
 using TimerOutputs, LoopVectorization
-
-Δx = 30.0
-Δt = 100
-U0=0.0001
-βz= 2e-6
-sea_level_file = Bintanja
-path_sea_level = "/home/albert/Dropbox/Riverini/Pluto/"
-solver_opt = TerraceKnickpoint
 
 function main(;
     Δx = 30.0, Δt = 100, U0=0.0001, βz= 2e-6, sea_level_file = Bintanja, 
@@ -30,7 +21,6 @@ function main(;
         #  - Spratt2016-800
         #  - Bintanja
     sealevelopts = SeaLevelOpts{sea_level_file}(path_sea_level)
-    # =========================================================================
     
     # INITIAL GEOMETRY ========================================================
     slope = slope 
@@ -96,25 +86,6 @@ function main(;
     sea_lvl_curve, sea_age  = get_sea_level(sealevelopts)
     sea_lvl_curve, sea_age, fsea = sea_level_corrections(sea_lvl_curve, sea_age, starting_time)
     # =========================================================================
-
-    # # UPLIFT RATES FROM ARMEL =================================================
-    # t_uplift = Vector{Float64}(undef,20)
-    # uplift_background = Vector{Float64}(undef, 20)
-    # if uplift_type == "armel"
-    #     t_uplift, uplift_background = read_uplift()
-    #     uplift_background = @. uplift_background * 2
-        
-    #     # -- define time interval
-    #     t0          = 3e6        # starting time in [kyr]
-    #     tf          = t0 + starting_time    # final time in [kyr]
-    #     # -- take time interval from time and uplift rate series
-    #     it0 = t_uplift .>= t0
-    #     uplift_background = view(uplift_background, it0)
-    #     t_uplift    = view(t_uplift, it0)
-    #     t_uplift    = @. t_uplift - t_uplift[1]
-    #     # =========================================================================
-    #     fU = interpolate((t_uplift,), uplift_background, Gridded(Linear()))
-    # end
 
     # SOLVER ==================================================================
     Δt = Δt
