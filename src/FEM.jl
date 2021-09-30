@@ -550,7 +550,7 @@ end
 function linearmesh(Δx,slope)
     # -- Mesh
     x       = collect(0:Δx:200e3)
-    z       = @. slope * x + 2e3    # 2e3 is the intercept
+    z       = @. slope * x + 1e3    # 2e3 is the intercept
     dx2     = Δx * Δx
     nn      = length(x)
 
