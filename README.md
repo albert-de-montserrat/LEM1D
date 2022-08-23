@@ -1,3 +1,12 @@
+# LEM1D
+Installation
+```julia
+] add https://github.com/albert-de-montserrat/LEM1D
+```
+
+Example of script:
+
+```julia
 using LEM1D
 using LinearAlgebra, Interpolations, LoopVectorization, Printf
 
@@ -135,7 +144,10 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
 
     return Terrace, tOut, terrace_age, reoccupation_time
 end
+```
 
+Run the script
+```julia
 deg2slope(deg) = tand(deg)
 
 degs = -10
@@ -146,3 +158,4 @@ uplift = 0
 recurrence_t = 0
 
 main(slope, βz, h_wb, recurrence_t, uplift)
+```
