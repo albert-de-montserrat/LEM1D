@@ -1,11 +1,9 @@
-# include("C:/Users/crosetto/Documents/TerracesJulia/LEM1D-main/src/FEM.jl")
-# using Pkg; Pkg.activate(".")
 using LEM1D
 using LinearAlgebra, Interpolations, LoopVectorization, Printf
 
 function main(slope, βz, h_wb, recurrence_t, uplift)
     # =========================================================================
-    uplift_type = "constant"   # "constant" or "armel"
+    uplift_type = "constant"
     sea_level_file = "Spratt2016-450"
     # options:
     #  - Spratt2016-450
@@ -17,12 +15,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     # =========================================================================
 
     # INITIAL GEOMETRY ========================================================
-    # profile = "slope";
-    # options:
-    #   "slope"         -> linear profile
-    #   "equilibrium"   -> from excel: exponential decay + sea floor topo
-    Δx = 5.0 # [m] distance between points
-    elementype = "linear"
+    Δx = 5.0 # [m] resolution
     L = 200e3
     Terrace = TerraceProfile(L, Δx, slope; intercept=2e3)
     x, z0, nn = deepcopy(Terrace.x), deepcopy(Terrace.z), Terrace.nnod
@@ -34,7 +27,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     eq_time = 0 # time counter for megathrust
     # =========================================================================
 
-    # PHYSICAL PARAMETERS - below sea level (from Malatesta for wave erosion) =
+    # PHYSICAL PARAMETERS =====================================================
     P0 = 5e-5 # shallowest
     # =========================================================================
 
@@ -63,29 +56,9 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     fsea = interpolate((reverse(sea_age),), reverse(sea_lvl_curve), Gridded(Linear()))
     # =========================================================================
 
-    # UPLIFT RATES FROM ARMEL =================================================
-    if uplift_type === "armel"
-        fname = fuplift
-        t_uplift, uplift_background = read_uplift(fname)
-        uplift_background = @. uplift_background    # * 2 when Armel's U is too low   
-        # -- define time interval
-        t0 = 0        # starting time in [kyr]
-        tf = t0 + starting_time    # final time in [kyr] tsh = screenshot time
-        # -- take time interval from time and uplift rate series
-        it0 = t_uplift .>= t0
-        uplift_background = view(uplift_background, it0)
-        t_uplift = view(t_uplift, it0)
-        t_uplift = @. t_uplift - t_uplift[1]
-        # ======================================================================
-        fU = interpolate((t_uplift,), uplift_background, Gridded(Linear()))
-    end
-    # =========================================================================
-
     # SOLVER ==================================================================
     Δt = 50.0 # time step (years)
-    t_plot = 0.0
     t = sea_age[end]     # initialise time
-    id_shore = 1
 
     # SOME PREALLOCATIONS    
     nit = Int64(floor(maximum(sea_age .- Δt) / Δt))
@@ -98,17 +71,12 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     reoccupation_id[Terrace.z .≤ fsea(t)] .= :submarine
 
     break_time = maximum(sea_age .- Δt)
-    println("Starting solver... \n")
     U = U0
+    println("Starting solver... \n")
     for it in 1:nit
 
-        # GET SEA LVL AND UPLIFT RATE =========================================
+        # GET SEA LEVEL =======================================================
         h_sea = fsea(t)
-        # -- find uplift rate at current time
-        if uplift_type === "armel"
-            # -- interpolate
-            U = fU(t)
-        end
         # =====================================================================
 
         # GET COORDS BELOW SEA LEVEL===========================================
@@ -169,6 +137,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
 end
 
 deg2slope(deg) = tand(deg)
+
 degs = -10
 slope = deg2slope(degs)
 h_wb = 15.0
