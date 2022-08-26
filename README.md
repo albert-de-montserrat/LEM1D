@@ -18,8 +18,6 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     #  - Spratt2016-450
     #  - Spratt2016-800
     #  - Bintanja3
-    #  - Bintanja6
-    #  - Bintanja3x2
     U0 = 0.002
     # =========================================================================
 
@@ -120,7 +118,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
         Terrace.z .+= U * Δt
         # =====================================================================
 
-        # REOCUPATION==========================================================
+        # REOCUPATION ==========================================================
         update_reoccupation!(reoccupation_time, reoccupation_id, t, h_sea, Terrace.z)
         # =====================================================================
 
