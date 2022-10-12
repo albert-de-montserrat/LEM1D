@@ -25,6 +25,45 @@ function terracenewton!(
     end
 end
 
+@inline distance(x1::Number, x2::Number) = √(x1^2-x2^2)
+
+function terrace_retreat!(
+    profile,
+    βx::Float64,
+    Poff::Float64,
+    P0::Float64,
+    h_wb::Float64,
+    dt::Float64,
+    h_sea::Float64,
+    i1::Int64,
+)
+    @inline sea_floor(h) = h_sea - h
+
+    dx = (profile.x[2] - profile.x[1])
+    _h_wb = inv(h_wb)
+    int = 0.0
+    for i in i1:profile.nnod-1
+        h = (h_sea - profile.z[i])
+        h > 100 && break # lets define the shelf at depths of > 200m
+        int += P0 * exp( -2 * (sea_floor(profile.z[i]) + sea_floor(profile.z[i+1])) * _h_wb) * dx
+        # it should be multiplied by 4, but we use two becase we take the mean
+        # of two consecutive sea flow elevation elements
+    end
+    Δx = -dt * βx * (Poff - int) # amount of retreat
+    # Δx = -dt * βx * (Poff - P0 * int * dx) # amount of retreat
+    
+    # erode cliff
+    # cliff_x0 = profile.x[i1] # original x-location
+    cliff_x  = profile.x[i1] + Δx # new x-position
+    cliff_z0 = profile.z[i1]
+    for i in i1:-1:1
+        profile.x[i] ≤ cliff_x && break
+        profile.z[i] = cliff_z0
+    end
+
+    println("Retreat of $(abs(Δx))m. Original x = $(profile.x[i1]), new x = $(cliff_x) ")
+end
+
 @inline function copyprofile!(dest, profile)
     @tturbo for i in eachindex(profile)
         dest[i] = profile[i]

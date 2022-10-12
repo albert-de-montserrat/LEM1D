@@ -9,7 +9,7 @@ module LEM1D
     export TerraceProfile
     
     include("terraces.jl")
-    export terracenewton!, find_shore_id
+    export terracenewton!, terrace_retreat!, find_shore_id
     
     include("others.jl")
     export variable_recurrence_time_fixed, poisson_time_serie, update_reoccupation!

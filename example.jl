@@ -11,7 +11,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     #  - Bintanja3
     #  - Bintanja6
     #  - Bintanja3x2
-    U0 = 0.002
+    U0 = 0.01
     # =========================================================================
 
     # INITIAL GEOMETRY ========================================================
@@ -29,6 +29,8 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
 
     # PHYSICAL PARAMETERS =====================================================
     P0 = 5e-5 # shallowest
+    Poff = 5e-2
+    βx = 5e-7 # 5e-7, 1.2e-6, 2.3e-6
     # =========================================================================
 
     # TIME CONSTANTS ==========================================================
@@ -96,6 +98,17 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
             buffer1,
             buffer2,
         )
+
+        terrace_retreat!(
+            Terrace,
+            βx,
+            Poff,
+            P0,
+            h_wb,
+            Δt * yr,
+            h_sea,
+            id_shore_terrace + 1,
+        )
         # =====================================================================
 
         # MEGATHRUST ==========================================================
@@ -124,6 +137,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
         end
         # =====================================================================
 
+        # t > 50e3 && break
         t > break_time && break
     end
 
@@ -140,9 +154,9 @@ deg2slope(deg) = tand(deg)
 
 degs = -10
 slope = deg2slope(degs)
-h_wb = 15.0
-βz = 2.0e-6
+h_wb = 150.0
+βz = 1.0e-5
 uplift = 0
 recurrence_t = 0
 
-main(slope, βz, h_wb, recurrence_t, uplift)
+Terrace, tOut, terrace_age, reoccupation_time = main(slope, βz, h_wb, recurrence_t, uplift)
