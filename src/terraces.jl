@@ -60,7 +60,7 @@ function terrace_retreat!(
         profile.z[i] = cliff_z0
     end
 
-    println("Retreat of $(abs(Δx))m. Original x = $(profile.x[i1]), new x = $(cliff_x) ")
+    # println("Retreat of $(abs(Δx))m. Original x = $(profile.x[i1]), new x = $(cliff_x) ")
 end
 
 @inline function copyprofile!(dest, profile)
