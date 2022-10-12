@@ -42,21 +42,20 @@ function terrace_retreat!(
     dx = (profile.x[2] - profile.x[1])
     _h_wb = inv(h_wb)
     int = 0.0
-    for i in i1:profile.nnod-1
+    @inbounds for i in i1:profile.nnod-1
         h = (h_sea - profile.z[i])
-        h > 100 && break # lets define the shelf at depths of > 200m
-        int += P0 * exp( -2 * (sea_floor(profile.z[i]) + sea_floor(profile.z[i+1])) * _h_wb) * dx
+        h > 200 && break # lets define the shelf at depths of > 200m
+        int += exp( -2 * (sea_floor(profile.z[i]) + sea_floor(profile.z[i+1])) * _h_wb) 
         # it should be multiplied by 4, but we use two becase we take the mean
         # of two consecutive sea flow elevation elements
     end
-    Δx = -dt * βx * (Poff - int) # amount of retreat
-    # Δx = -dt * βx * (Poff - P0 * int * dx) # amount of retreat
+    Δx = -dt * βx * (Poff - P0 * int * dx) # amount of retreat
     
     # erode cliff
     # cliff_x0 = profile.x[i1] # original x-location
     cliff_x  = profile.x[i1] + Δx # new x-position
     cliff_z0 = profile.z[i1]
-    for i in i1:-1:1
+    @inbounds for i in i1:-1:1
         profile.x[i] ≤ cliff_x && break
         profile.z[i] = cliff_z0
     end
