@@ -1,4 +1,31 @@
-function terracenewton!(
+# function terrace_vertical_erosion!(
+#     βz::Float64,
+#     P::Float64,
+#     h_wb::Float64,
+#     dt::Float64,
+#     sol::Vector{Float64},
+#     h_sea::Float64,
+#     i1::Int64,
+#     i2::Int64,
+#     sol_n,
+#     sol_old,
+# )
+#     cte1 = βz * P * dt
+#     cte2 = 4.0 / h_wb
+#     cte3 = cte1 * cte2
+#     copyprofile!(sol_old, sol)
+#     residual = Inf
+#     while residual > 1e-8
+#         copyprofile!(sol_n, sol)
+#         @turbo for ii in i1:i2
+#             cte4 = exp(-cte2 * (h_sea - sol[ii]))
+#             sol[ii] -= (sol[ii] + cte1 * cte4 - sol_old[ii]) / (1 + cte3 * cte4)
+#         end
+#         residual = norm2(sol, sol_n)
+#     end
+# end
+
+function terrace_vertical_erosion!(
     βz::Float64,
     P::Float64,
     h_wb::Float64,
@@ -12,20 +39,43 @@ function terracenewton!(
 )
     cte1 = βz * P * dt
     cte2 = 4.0 / h_wb
-    cte3 = cte1 * cte2
     copyprofile!(sol_old, sol)
     residual = Inf
-    while residual > 1e-6
+
+    while residual > 1e-8
         copyprofile!(sol_n, sol)
-        @turbo for ii in i1:i2
-            cte4 = exp(-cte2 * (h_sea - sol[ii]))
-            sol[ii] -= (sol[ii] + cte1 * cte4 - sol_old[ii]) / (1.0 + cte3 * cte4)
+        @tturbo for ii in i1:i2
+            sol[ii] -= f(cte1, cte2, h_sea, sol[ii], sol_old[ii])
         end
         residual = norm2(sol, sol_n)
     end
+
 end
 
-@inline distance(x1::Number, x2::Number) = √(x1^2-x2^2)
+@inline _f(cte1, cte2, h_sea, x, x_old) = muladd(cte1, exp(-cte2 * (h_sea - x)), x) - x_old
+
+@inline function f(cte1, cte2, h_sea, x, x_old)
+    x, dx = f_df(x->_f(cte1, cte2, h_sea, x, x_old), x)
+    return x * inv(dx)
+end
+
+function terrace_vertical_explicit!(
+    βz::Float64,
+    P::Float64,
+    h_wb::Float64,
+    dt::Float64,
+    sol::Vector{Float64},
+    h_sea::Float64,
+    i1::Int64,
+    i2::Int64,
+)
+    cte1 = βz * P * dt
+    cte2 = 4.0 / h_wb
+
+    @turbo for ii in i1:i2
+        sol[ii] -= cte1 * exp(-cte2 * (h_sea - sol[ii]))
+    end
+end
 
 function terrace_retreat!(
     profile,
@@ -44,10 +94,10 @@ function terrace_retreat!(
     int = 0.0
     @inbounds for i in i1:profile.nnod-1
         h = (h_sea - profile.z[i])
-        h > 200 && break # lets define the shelf at depths of > 200m
-        int += exp( -2 * (sea_floor(profile.z[i]) + sea_floor(profile.z[i+1])) * _h_wb) 
+        h > 200.0 && break # lets define the shelf at depths of > 200m
+        int += exp( -2.0 * (sea_floor(profile.z[i]) + sea_floor(profile.z[i+1])) * _h_wb) 
         # it should be multiplied by 4, but we use two becase we take the mean
-        # of two consecutive sea flow elevation elements
+        # of two consecutive sea floor elevation elements
     end
     Δx = -dt * βx * (Poff - P0 * int * dx) # amount of retreat
     
