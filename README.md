@@ -157,3 +157,6 @@ recurrence_t = 0
 
 main(slope, βz, h_wb, recurrence_t, uplift)
 ```
+
+Citation:
+Crosetto, Silvia; De Montserrat, Albert; Oncken, Onno (2023): Script and case study dataset for numerical modelling of uplifted marine terrace sequences. GFZ Data Services. [https://doi.org/10.5880/GFZ.4.1.2023.003](https://doi.org/10.5880/GFZ.4.1.2023.003)
