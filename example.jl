@@ -86,7 +86,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
         # =====================================================================
 
         # TERRACES SOLVER =====================================================
-        terracenewton!(
+        terrace_vertical_erosion!(
             βz,
             P0,
             h_wb,
