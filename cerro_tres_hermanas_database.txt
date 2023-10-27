@@ -1,0 +1,108 @@
+%% Crosetto, Silvia; De Montserrat, Albert; Oncken, Onno (2023): Script and case study dataset for numerical modelling of uplifted marine terrace sequences. GFZ Data Services. https://doi.org/10.5880/GFZ.4.1.2023.003
+
+%% CASE STUDY DATASET
+
+
+
+
+%% DATA
+
+% The data reported below are tab-delimited. Data marked with * are published in the study of Saillard et al., 2011.
+
+% Slope: 4.5° to 5°
+
+% Columns 1:6 report unmodified data from Saillard (2011): 
+(:,1) Shoreline elevation [m]: shoreline elevation study site
+(:,2) Be age [ka]: exposure age
+(:,3) Be error [ka]: exposure age error
+(:,4) MIS: MIS stage attributed to each shoreline of study site
+(:,5) MIS age Saillard 2011 [ka]: SL age reported in the original study
+(:,6) SL Saillard 2011 [m]: MIS SL position a.s.l. reported in the original study
+
+% Columns 7:9 are recalculated values based on the SL curve of Spratt (2016):
+(:,7) MIS age SL [ka]: age of MIS according to the SL curve of Spratt 2016
+(:,8) SL Spratt 2016 [m]: SL position at MIS based on the SL curve of Spratt (2016)
+(:,9) corr. Present SL [m]: SL correction with respect to modern sea level
+
+Shoreline elev* (m)	Be age* (ka)	Be error* (ka)	MIS*	MIS age* (ka)	SL* (m a.s.l.)	MIS age SL spr (ka)	SL Spratt 2016 (m a.s.l.)	corr. Present SL (m)
+0						0	8.96	
+40			5a	80	-15	80	-25	-33.96
+55			5c	100	-15	100	-17	-25.96
+80			5e	122	3	122	12	3.04
+130			7e	232	-10	237	-12	-20.96
+145			9a	285	-15	285	-39	-47.96
+160	352	24	9c	321	2.5	321	-0.5	-9.46
+175			11	405	0	404	19	10.04
+
+
+
+
+%% STEADY UPLIFT RATES
+
+% The data provided above are used to calculate the average uplift rates with the formula 
+[('Terrace2 elevation'- 'SL 2')-('Terrace1 elevation'- 'SL 1')] / (Terrace2 age - Terrace1 age)
+
+where 2 is older than 1.
+
+Only uplift rates for the dated shoreline, located at 160 m a.s.l., were calculated to allow for comparison between cross-correlation, interpretation, and dated age. Below the reference age and the resulting uplift rate are reported.
+- 10Be age:	0.481 mm/yr
+- MIS age Saillard:	0.491 mm/yr
+- MIS age SL curve Spratt:	0.528 mm/yr
+
+
+
+
+%% VARIABLE UPLIFT RATES AND COSEISMIC UPLIFT
+
+% In columns 1:3 the calculated values for incremental uplift rates.
+(:,1) dUs: values proposed by Saillard (2011)
+(:,2) dUr: recalculated using MIS age and SL values from Saillard (2011)
+(:,3) dU SL based: calculated using MIS age and SL from Spratt (2016) with relative correction for present SL
+
+% In columns 4:6 the incremental values for the earthquake uplift cases based on dU as average uplift rate:
+(:,4) RI for D= 0.5 m: recurrence interval given a fixed 0.5m coseismic uplift
+(:,5) D for RI= 1000 yr: coseismic uplift in m given a 1000 yr recurrence interval
+(:,6) D for RI= 2500 yr: coseismic uplift in m given a 2500 yr recurrence interval
+
+% In columns 7:8 the time intervals for terrace abandonment.
+(:,7) t_ka: highstand start-end of time interval
+(:,8) t_ka lag: lowstand start-end of time interval
+		
+dUs (mm/yr)	dUr (mm/yr)	dU SL based (mm/yr)	RI for D= 0.5 m (yr)	D for RI= 1000 yr (m)	D for RI= 2500 yr (m)	t_ka (kyr BP)	t_ka lag (kyr BP)
+							
+0.7000	0.6875	0.9245	541	0.9245	2.3113	0-80	0-93
+0.6500	0.7500	0.3500	1429	0.3500	0.8750	80-100	93-111
+0.2300	0.3182	-0.1818	-2750	-0.1818	-0.4545	100-122	111-138
+0.6100	0.5727	0.6435	777	0.6435	1.6087	122-237	138-251
+0.2700	0.3774	0.8750	571	0.8750	2.1875	237-285	251-291
+0.1000	-0.0694	-0.6528	-766	-0.6528	-1.6319	285-321	291-342
+0.2200	0.2083	-0.0542	-9222	-0.0542	-0.1355	321-405	342-428
+
+
+% In the table below, values for earthquake coseismic uplift with steady (1,:) and variable (2:7,:) average uplift rates.
+
+% (:,1:3) average uplift rates at the beginning and at the end of the model run, with switch occurring at (:,3) value.
+
+% (:,4:6) earthquake uplift values with
+(:,4) coseismic recurrence interval [yr] given a fixed 0.5m coseismic uplift
+(:,5) coseismic uplift [m] given a 1000 yr recurrence interval
+(:,6) coseismic uplift [m] given a 2500 yr recurrence interval
+
+
+start (mm/yr)	end (mm/yr)	time (ka)	recT 0.5m coseismic (yr)	recT1000 (m)	recT2500 (m)
+0.65	NaN	NaN	769	0.65	1.625				
+0.528	dU	428	947	0.528	1.32				
+0.5	dU	405	1000	0.5	1.25
+0.47	NaN	150	1064	0.47	1.175
+NaN	0.7	150	714	0.7	1.75
+0.33	NaN	200	1515	0.33	0.825
+NaN	0.8	200	625	0.8	2
+
+
+
+
+%% REFERENCES
+
+Saillard, M., Hall, S. R., Audin, L., Farber, D. L., Regard, V., & Hérail, G. (2011). Andean coastal uplift and active tectonics in southern Peru: 10Be surface exposure dating of differentially uplifted marine terrace sequences (San Juan de Marcona, ˜15.4°S). Geomorphology, 128 (3-4), 178–190. doi:10.1016/j.geomorph.2011.01.004
+
+Spratt, R. M., & Lisiecki, L. E. (2016). A Late Pleistocene sea level stack. Climate of the Past , 12 (4), 1079–1092. doi: 10.5194/cp-12-1079-2016
