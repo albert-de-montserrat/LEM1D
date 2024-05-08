@@ -16,6 +16,9 @@ module LEM1D
     include("grid.jl")
     export TerraceProfile
     
+    include("params.jl")
+    export TerraceParams
+
     include("terraces.jl")
     export terrace_vertical_erosion!, terrace_retreat!, find_shore_id, terrace_vertical_explicit!
     
