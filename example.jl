@@ -28,9 +28,10 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     # =========================================================================
 
     # PHYSICAL PARAMETERS =====================================================
-    P0 = 5e-5 # shallowest
+    P0   = 5e-5 # shallowest
     Poff = 5e-2
-    βx = 5e-7 # 5e-7, 1.2e-6, 2.3e-6
+    βx   = 5e-7 # 5e-7, 1.2e-6, 2.3e-6
+    terrace_params = TerraceParams(; h_wb = h_wb, βz = βz, βx = βx, Poff = Poff, P0 = P0, n = Terrace.nnod)
     # =========================================================================
 
     # TIME CONSTANTS ==========================================================
@@ -65,7 +66,7 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
     # SOME PREALLOCATIONS    
     nit = Int64(floor(maximum(sea_age .- Δt) / Δt))
     tOut = Vector{Float64}(undef, nit)
-    buffer1, buffer2 = deepcopy(Terrace.z), deepcopy(Terrace.z)
+    # buffer1, buffer2 = deepcopy(Terrace.z), deepcopy(Terrace.z)
     t1 = time()
     terrace_age = zeros(nn)
     reoccupation_time = zeros(nn, 3)
@@ -87,24 +88,16 @@ function main(slope, βz, h_wb, recurrence_t, uplift)
 
         # TERRACES SOLVER =====================================================
         terrace_vertical_erosion!(
-            βz,
-            P0,
-            h_wb,
+            Terrace,
+            terrace_params,
             Δt * yr,
-            Terrace.z,
             h_sea,
             id_shore_terrace + 1,
-            nn,
-            buffer1,
-            buffer2,
         )
 
         terrace_retreat!(
             Terrace,
-            βx,
-            Poff,
-            P0,
-            h_wb,
+            terrace_params,
             Δt * yr,
             h_sea,
             id_shore_terrace + 1,
@@ -159,4 +152,4 @@ h_wb = 150.0
 uplift = 0
 recurrence_t = 0
 
-Terrace, tOut, terrace_age, reoccupation_time = main(slope, βz, h_wb, recurrence_t, uplift)
+Terrace, tOut, terrace_age, reoccupation_time = main(slope, βz, h_wb, recurrence_t, uplift);
